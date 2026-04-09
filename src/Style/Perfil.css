@@ -1,0 +1,37 @@
+.Admin_Perfil {
+    display: flex;
+    width: 100%;
+    min-height: 100vh;
+    background-color: #f9fbf7;
+}
+
+.Contenedor_Perfil {
+    flex: 1;
+    margin-left: 250px; 
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s ease;
+}
+
+
+
+
+@media (max-width: 1024px) {
+    .Contenedor_Perfil {
+        margin-left: 240px; 
+    }
+}
+
+@media (max-width: 768px) {
+    .Contenedor_Perfil {
+        margin-left: 70px; 
+    }
+    
+}
+
+@media (max-width: 480px) {
+
+    .Contenedor_Perfil{
+        margin-left: 0;
+    }
+}
