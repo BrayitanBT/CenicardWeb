@@ -11,6 +11,7 @@ import Servicios from './Components/Servicios.jsx'
 import Perfil from './Components/Perfil.jsx'
 import Historial from './Components/Historial.jsx'
 import Añadir from './Components/Añadir.jsx'
+import Categorias from './Components/Categorias.jsx'
 import { ProtectedRoute } from './Components/ProtectedRoute.jsx'
 
 // Componente para agrupar rutas protegidas
@@ -26,6 +27,7 @@ function ProtectedRoutes() {
       <Route path='/Perfil' element={<Perfil />} />
       <Route path='/Historial' element={<Historial />} />
       <Route path='/Añadir' element={<Añadir />} />
+      <Route path='/Categorias' element={<Categorias />} />
     </Routes>
   )
 }

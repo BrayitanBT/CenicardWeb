@@ -219,36 +219,49 @@ export async function getPrestamos() {
 // Función para aprobar préstamo (sin triggers de notificaciones)
 export async function aprobarPrestamo(id, gestionado_por_id) {
   try {
-    // 1. Primero obtener el equipo_id
+    // Usar una transacción para asegurar consistencia
     const { data: prestamo, error: getError } = await supabase
       .from('prestamos')
-      .select('equipo_id')
+      .select('equipo_id, usuario_id')
       .eq('id', id)
       .single()
     
-    if (getError) throw getError
+    if (getError) {
+      console.error('Error obteniendo préstamo:', getError)
+      throw getError
+    }
     
-    // 2. Actualizar el préstamo (solo campos necesarios)
+    // Actualizar el préstamo
     const { error: updateError } = await supabase
       .from('prestamos')
       .update({ 
         estado: 'aceptado', 
         fecha_aceptacion: new Date().toISOString(),
-        gestionado_por: gestionado_por_id
+        gestionado_por: gestionado_por_id,
+        updated_at: new Date().toISOString()
       })
       .eq('id', id)
     
-    if (updateError) throw updateError
+    if (updateError) {
+      console.error('Error actualizando préstamo:', updateError)
+      throw updateError
+    }
     
-    // 3. Actualizar el equipo por separado
+    // Actualizar el equipo
     const { error: equipoError } = await supabase
       .from('equipos')
-      .update({ estado: 'no_disponible' })
+      .update({ 
+        estado: 'no_disponible',
+        updated_at: new Date().toISOString()
+      })
       .eq('id', prestamo.equipo_id)
     
-    if (equipoError) throw equipoError
+    if (equipoError) {
+      console.error('Error actualizando equipo:', equipoError)
+      throw equipoError
+    }
     
-    return { success: true }
+    return { success: true, message: 'Préstamo aprobado correctamente' }
     
   } catch (error) {
     console.error('Error aprobando préstamo:', error)
@@ -259,36 +272,49 @@ export async function aprobarPrestamo(id, gestionado_por_id) {
 // Función para rechazar préstamo
 export async function rechazarPrestamo(id, motivo_rechazo, gestionado_por_id) {
   try {
-    // 1. Obtener el equipo_id
+    // Obtener información del préstamo
     const { data: prestamo, error: getError } = await supabase
       .from('prestamos')
-      .select('equipo_id')
+      .select('equipo_id, usuario_id')
       .eq('id', id)
       .single()
     
-    if (getError) throw getError
+    if (getError) {
+      console.error('Error obteniendo préstamo:', getError)
+      throw getError
+    }
     
-    // 2. Actualizar el préstamo como rechazado
+    // Actualizar el préstamo como rechazado
     const { error: updateError } = await supabase
       .from('prestamos')
       .update({ 
         estado: 'rechazado', 
         motivo_rechazo,
-        gestionado_por: gestionado_por_id
+        gestionado_por: gestionado_por_id,
+        updated_at: new Date().toISOString()
       })
       .eq('id', id)
     
-    if (updateError) throw updateError
+    if (updateError) {
+      console.error('Error actualizando préstamo:', updateError)
+      throw updateError
+    }
     
-    // 3. Liberar el equipo
+    // Liberar el equipo (volver a disponible)
     const { error: equipoError } = await supabase
       .from('equipos')
-      .update({ estado: 'disponible' })
+      .update({ 
+        estado: 'disponible',
+        updated_at: new Date().toISOString()
+      })
       .eq('id', prestamo.equipo_id)
     
-    if (equipoError) throw equipoError
+    if (equipoError) {
+      console.error('Error liberando equipo:', equipoError)
+      throw equipoError
+    }
     
-    return { success: true }
+    return { success: true, message: 'Préstamo rechazado correctamente' }
     
   } catch (error) {
     console.error('Error rechazando préstamo:', error)
@@ -989,6 +1015,73 @@ export async function getHistorial(filtros = {}) {
     equipo_nombre: item.equipos ? `${item.equipos.numero} - ${item.equipos.marca || ''} ${item.equipos.modelo || ''}`.trim() : 'N/A',
     equipo_categoria: item.equipos?.categorias_equipos?.nombre || 'N/A',
     gestionado_por_nombre: item.gestionado_por ? `${item.gestionado_por.primer_nombre} ${item.gestionado_por.primer_apellido}` : 'Sistema'
+  }))
+}
+
+// ============ SOLICITUDES DE PRÉSTAMOS ============
+export async function crearSolicitudPrestamo(usuarioId, equipoId, fechaDevolucionEsperada = null, observaciones = null) {
+  try {
+    // Verificar que el equipo esté disponible
+    const { data: equipo, error: equipoError } = await supabase
+      .from('equipos')
+      .select('estado, activo')
+      .eq('id', equipoId)
+      .single()
+    
+    if (equipoError) throw equipoError
+    
+    if (!equipo.activo || equipo.estado !== 'disponible') {
+      throw new Error('El equipo no está disponible para préstamo')
+    }
+    
+    // Crear la solicitud de préstamo
+    const { data, error } = await supabase
+      .from('prestamos')
+      .insert([{
+        usuario_id: usuarioId,
+        equipo_id: equipoId,
+        estado: 'pendiente',
+        fecha_devolucion_esperada: fechaDevolucionEsperada,
+        observaciones: observaciones
+      }])
+      .select()
+    
+    if (error) throw error
+    
+    // Marcar el equipo como ocupado temporalmente
+    await supabase
+      .from('equipos')
+      .update({ estado: 'ocupado' })
+      .eq('id', equipoId)
+    
+    return data[0]
+  } catch (error) {
+    console.error('Error creando solicitud de préstamo:', error)
+    throw error
+  }
+}
+
+export async function getSolicitudesPorUsuario(usuarioId) {
+  const { data, error } = await supabase
+    .from('prestamos')
+    .select(`
+      *,
+      equipos:equipo_id(
+        id, numero, marca, modelo, serial,
+        categorias_equipos(nombre, icono)
+      )
+    `)
+    .eq('usuario_id', usuarioId)
+    .order('fecha_solicitud', { ascending: false })
+
+  if (error) {
+    console.error('Error obteniendo solicitudes del usuario:', error)
+    return []
+  }
+  
+  return data.map(solicitud => ({
+    ...solicitud,
+    equipo_info: solicitud.equipos ? `${solicitud.equipos.numero} - ${solicitud.equipos.marca || ''} ${solicitud.equipos.modelo || ''}`.trim() : 'N/A'
   }))
 }
 
