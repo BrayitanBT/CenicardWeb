@@ -236,29 +236,13 @@ export async function aprobarPrestamo(id, gestionado_por_id) {
       .from('prestamos')
       .update({ 
         estado: 'aceptado', 
-        fecha_aceptacion: new Date().toISOString(),
-        gestionado_por: gestionado_por_id,
-        updated_at: new Date().toISOString()
+        gestionado_por: gestionado_por_id
       })
       .eq('id', id)
     
     if (updateError) {
       console.error('Error actualizando préstamo:', updateError)
       throw updateError
-    }
-    
-    // Actualizar el equipo
-    const { error: equipoError } = await supabase
-      .from('equipos')
-      .update({ 
-        estado: 'no_disponible',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', prestamo.equipo_id)
-    
-    if (equipoError) {
-      console.error('Error actualizando equipo:', equipoError)
-      throw equipoError
     }
     
     return { success: true, message: 'Préstamo aprobado correctamente' }
@@ -282,36 +266,6 @@ export async function rechazarPrestamo(id, motivo_rechazo, gestionado_por_id) {
     if (getError) {
       console.error('Error obteniendo préstamo:', getError)
       throw getError
-    }
-    
-    // Actualizar el préstamo como rechazado
-    const { error: updateError } = await supabase
-      .from('prestamos')
-      .update({ 
-        estado: 'rechazado', 
-        motivo_rechazo,
-        gestionado_por: gestionado_por_id,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', id)
-    
-    if (updateError) {
-      console.error('Error actualizando préstamo:', updateError)
-      throw updateError
-    }
-    
-    // Liberar el equipo (volver a disponible)
-    const { error: equipoError } = await supabase
-      .from('equipos')
-      .update({ 
-        estado: 'disponible',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', prestamo.equipo_id)
-    
-    if (equipoError) {
-      console.error('Error liberando equipo:', equipoError)
-      throw equipoError
     }
     
     return { success: true, message: 'Préstamo rechazado correctamente' }
@@ -339,21 +293,12 @@ export async function devolverEquipo(id, gestionado_por_id) {
       .from('prestamos')
       .update({ 
         estado: 'devuelto', 
-        fecha_devolucion: new Date().toISOString(),
         gestionado_por: gestionado_por_id
       })
       .eq('id', id)
     
     if (updateError) throw updateError
-    
-    // 3. Liberar el equipo
-    const { error: equipoError } = await supabase
-      .from('equipos')
-      .update({ estado: 'disponible' })
-      .eq('id', prestamo.equipo_id)
-    
-    if (equipoError) throw equipoError
-    
+      
     return { success: true }
     
   } catch (error) {
@@ -1086,7 +1031,7 @@ export async function getSolicitudesPorUsuario(usuarioId) {
 }
 
 // ============ AUTENTICACIÓN ============
-const ROLES_PERMITIDOS = ['funcionario', 'admin', 'contratista']
+const ROLES_PERMITIDOS = ['funcionario', 'admin']
 
 export async function loginConDocumento(documento, contrasena) {
   try {
@@ -1129,7 +1074,7 @@ export async function loginConDocumento(documento, contrasena) {
       }
     }
 
-    // 3. Validar rol - solo permitir acceso a funcionarios, admin y contratistas
+    // 3. Validar rol - solo permitir acceso a funcionarios y admin 
     if (!ROLES_PERMITIDOS.includes(usuario.rol)) {
       return { 
         data: null, 
